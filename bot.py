@@ -64,10 +64,10 @@ async def plain_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     elif mode == "TRANSLATOR":
         response = await chat_gpt.send_question(dialog.prompt, text)
-        await send_text_buttons(update, context, "це перекладається як:")
+        await send_text(update, context, "це перекладається як:")
         await send_text_buttons(update, context, response, {
             "transl_change": "інша мова",
-            "transl_finish": "🛑 вийти в меню"
+            "transl_finish": "🛑 Закінчити"
         })
 
 
@@ -276,24 +276,16 @@ async def quiz_buttons_handler(update: Update, context):
         await send_text(update, context, quiz_quest)
     await update.callback_query.answer()
 
-"""
-Бот пропонує вибрати мову, на яку потрібно перекласти текст, використовуючи кнопки.
-Після вибору мови користувач надсилає текст, який потрібно перекласти.
-Бот використовує ChatGPT для перекладу тексту та надсилає результат користувачеві.
-До повідомлення має бути прикріплена кнопка зміни мови та кнопка "Закінчити", натискання на яку
-працює так само, як команда /start.
-"""
-
-async def translator(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
     context.user_data['dialog'].set_mode("TRANSLATOR", "")
 
-    await send_text_buttons(update, context, "textОберіть на яку мову перекласти", {
+    await send_text_buttons(update, context, "Оберіть на яку мову перекласти", {
                             "transl_eng": "англійська",
                             "transl_de": "німецька",
                             "transl_es": "іспанська",
                             "transl_jp": "японська",
-                            "transl_finish": "🛑 вийти в меню"
+                            "transl_finish": "🛑 Закінчити"
                         })
 
 async def transl_buttons_handler(update: Update, context):
@@ -302,14 +294,18 @@ async def transl_buttons_handler(update: Update, context):
     query = update.callback_query.data
     if query == 'transl_eng':
         dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову англійська")
+        await send_text(update, context, "Обрано англійську")
     elif query == 'transl_de':
         dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову німецька")
+        await send_text(update, context, "Обрано німецьку")
     elif query == 'transl_es':
         dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову іспанська")
+        await send_text(update, context, "Обрано іспанську")
     elif query == 'transl_jp':
         dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову японська")
+        await send_text(update, context, "Обрано японську")
     elif query == "transl_change":
-        translator(update, context)
+        await translate(update, context)
 
     await update.callback_query.answer()
 
@@ -324,7 +320,7 @@ app.add_handler(CommandHandler('random', random))
 app.add_handler(CommandHandler('gpt', gpt))
 app.add_handler(CommandHandler('talk', talk))
 app.add_handler(CommandHandler('quiz', quiz))
-app.add_handler(CommandHandler('translator', translator))
+app.add_handler(CommandHandler('translate', translate))
 
 # Зареєструвати обробник колбеку можна так:
 app.add_handler(CallbackQueryHandler(finish_buttons_handler, pattern='.*_finish$')) #всі кнопки *_finish однаково вертають на початок
