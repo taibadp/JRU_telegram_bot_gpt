@@ -97,4 +97,38 @@ async def default_callback_handler(update: Update,
 
 
 class Dialog:
-    pass
+    mode: str = "DEFAULT"  # обраний пункт головного меню
+    talk_mode: str = ""
+    prompt: str = ""
+    quiz_theme: str = ""
+    quiz_quest: str = ""
+    quiz_score: int = 0
+    quiz_total: int = 0
+
+    def __init__(self):
+        self.mode = "DEFAULT"  # обраний пункт головного меню
+        self.talk_mode = ""
+        self.prompt = ""
+        self.quiz_theme = ""
+        self.quiz_quest = ""
+        self.quiz_score = 0
+        self.quiz_total = 0
+
+    def set_mode(self, mode: str, prompt: str = ""):
+        self.mode = mode
+        self.prompt = prompt
+
+    def end_current_dialog(self):
+        self.__init__()
+
+    def start_quiz(self, theme: str):
+        self.quiz_theme = theme
+        self.quiz_score = 0
+        self.quiz_total = 0
+
+    def quiz_count_good_answer(self, response: str):
+        if "Правильно" in response:
+            self.quiz_score += 1
+
+    def current_quiz_score(self):
+        return f"правильних {self.quiz_score}/{self.quiz_total}"
