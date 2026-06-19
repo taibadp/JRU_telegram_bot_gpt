@@ -59,7 +59,22 @@ async def plain_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         await send_text_buttons(update, context, f'{response} {dialog.current_quiz_score()}', quiz_buttons_menu())
 
-    else:
+    elif mode == "FILMS":
+
+        if dialog.film_mode == "GENRE":
+            dialog.film_genre = text
+        # test
+        response = await chat_gpt.send_question(f"Перевір наявність вказаного жанру у вказаній категорії творів мистецтва", f"чи існує жанр {text} в категорії {dialog.films_cat}? Відповідь ТАК або НІ")
+        if response == "НІ":
+            await send_text_buttons(update, context, "Такого жанру не існує. Спробуйте ще", {"films_finish": "🛑 Закінчити"})
+        else:
+            if not dialog.film_dict:
+                message = ""
+            else:
+                message = "Врахуй, що не подобаються наступні твори: " # todo
+            await films_ask(update, context)
+
+else:
         await send_text(update, context, "Ви не обрали режим спілкування. За подробицями зверніться до /start")
 
 async def finish_buttons_handler(update: Update, context):
@@ -85,7 +100,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'random': 'Дізнатися випадковий цікавий факт 🧠',
         'gpt': 'Задати питання чату GPT 🤖',
         'talk': 'Поговорити з відомою особистістю 👤',
-        'quiz': 'Взяти участь у квізі ❓'
+        'quiz': 'Взяти участь у квізі ❓',
+        'films': 'Рекомендації фільмів'
         # Додати команду в меню можна так:
         # 'command': 'button text'
 
@@ -263,6 +279,62 @@ async def quiz_buttons_handler(update: Update, context):
         await send_text(update, context, quiz_quest)
     await update.callback_query.answer()
 
+"""**"Рекомендації щодо фільмів та книг"**
+
+Бот пропонує вибрати категорію рекомендацій: фільми, книги, музика.
+Після вибору категорії бот запитує жанр.
+Після отримання, формує запит та запитує у ChatGPT рекомендації 
+та надсилає їх користувачеві.
+До них мають бути прикріплені кнопки:
+
+"Не подобається", яка робить вибраний твір нецікавим. Натискання на
+кнопку генерує нову відповідь, враховуючи всі нецікаві твори, введені користувачем.
+
+"Закінчити", натискання на яку працює так само, як команда /start.
+"""
+async def films(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    init_dialog_if_not(context)
+    context.user_data['dialog'].set_mode("FILMS", "")
+    dialog.film_mode = "CAT"
+    dialog.film_genre = ""
+    await send_text_buttons(update, context, "Оберіть категорію", {
+                            "films_films": "фільми",
+                            "films_books": "книги",
+                            "films_music": "музика",
+                            "films_finish": "🛑 Закінчити"
+                        })
+
+async def films_ask(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    init_dialog_if_not(context)
+    dialog = context.user_data['dialog']
+
+    response = await chat_gpt.send_question(
+        f"Порекомендуй твір у категорії {dialog.films_cat} жанра {dialog.films_genre}",
+        message)
+    await send_text_buttons(update, context, response, {"films_dislike": "фуууу", "films_finish": "🛑 Закінчити"})
+
+async def films_buttons_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    init_dialog_if_not(context)
+    dialog = context.user_data['dialog']
+    query = update.callback_query.data
+    if query == "films_films":
+        dialog.film_cat = "фільми"
+    elif query == "films_books":
+        dialog.film_cat = "книги"
+    elif query == "films_music":
+        dialog.film_cat = "музика"
+    elif query == "films_dislike":
+        #попередня строка - взяти назву - занести
+        last_film = dialog.film_recomend
+        dialog.film_dict[last_film] = False
+        await films_ask(update: Update, context: ContextTypes.DEFAULT_TYPE)
+
+    message = "Оберіть жанр"
+    dialog.film_mode = "GENRE"
+    await send_text_buttons(update, context, "Тепер напишіть жанр", {
+        "films_finish": "🛑 Закінчити"
+    })
+
 
 chat_gpt = ChatGptService(credentials.ChatGPT_TOKEN)
 app = ApplicationBuilder().token(credentials.BOT_TOKEN).build()
@@ -275,6 +347,7 @@ app.add_handler(CommandHandler('random', random))
 app.add_handler(CommandHandler('gpt', gpt))
 app.add_handler(CommandHandler('talk', talk))
 app.add_handler(CommandHandler('quiz', quiz))
+app.add_handler(CommandHandler('films', films))
 
 # Зареєструвати обробник колбеку можна так:
 app.add_handler(CallbackQueryHandler(finish_buttons_handler, pattern='.*_finish$')) #всі кнопки *_finish однаково вертають на початок
@@ -282,6 +355,8 @@ app.add_handler(CallbackQueryHandler(random_buttons_handler, pattern='^random_.*
 #app.add_handler(CallbackQueryHandler(gpt_buttons_handler, pattern='^gpt_.*'))
 app.add_handler(CallbackQueryHandler(talk_buttons_handler, pattern='^talk_.*'))
 app.add_handler(CallbackQueryHandler(quiz_buttons_handler, pattern='^quiz_.*'))
+app.add_handler(CallbackQueryHandler(films_buttons_handler, pattern='^films_.*'))
+
 # app.add_handler(CallbackQueryHandler(default_callback_handler))
 
 app.run_polling()

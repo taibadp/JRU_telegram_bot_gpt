@@ -104,6 +104,11 @@ class Dialog:
     quiz_quest: str = ""
     quiz_score: int = 0
     quiz_total: int = 0
+    film_mode = ""
+    film_cat = ""
+    film_genre = ""
+    film_recomend = ""
+    film_dict = {}
 
     def __init__(self):
         self.mode = "DEFAULT"  # обраний пункт головного меню
@@ -113,6 +118,11 @@ class Dialog:
         self.quiz_quest = ""
         self.quiz_score = 0
         self.quiz_total = 0
+        self.film_mode = ""
+        self.film_dict = {}
+        self.film_cat = ""
+        self.film_genre = ""
+        self.film_recomend = ""
 
     def set_mode(self, mode: str, prompt: str = ""):
         self.mode = mode
