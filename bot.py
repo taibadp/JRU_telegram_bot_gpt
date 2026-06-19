@@ -106,8 +106,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'gpt': 'Задати питання чату GPT 🤖',
         'talk': 'Поговорити з відомою особистістю 👤',
         'quiz': 'Взяти участь у квізі ❓',
-        'translator': 'перекласти іншою мовою'
-        'quiz': 'Взяти участь у квізі ❓',
+        'translator': 'перекласти іншою мовою',
         'films': 'Рекомендації фільмів'
         # Додати команду в меню можна так:
         # 'command': 'button text'
@@ -361,8 +360,7 @@ async def films_buttons_handler(update: Update, context: ContextTypes.DEFAULT_TY
         dialog.films_dict[last_film] = False
         await films_ask(update, context)
 
-    if dialog.films_mode = "CAT":
-        message = "Оберіть жанр"
+    if dialog.films_mode == "CAT":
         dialog.films_mode = "GENRE"
         await send_text_buttons(update, context, "Тепер напишіть жанр", {
             "films_finish": "🛑 Закінчити"
