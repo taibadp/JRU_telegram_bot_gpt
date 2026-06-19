@@ -15,7 +15,10 @@ def init_dialog_if_not(context: ContextTypes.DEFAULT_TYPE):
         context.user_data["dialog"] = Dialog()
 
 async def show_mode_head(update: Update, context: ContextTypes.DEFAULT_TYPE, mode: str, buttons: dict = None):
-    await send_image(update, context, mode)
+    try:
+        await send_image(update, context, mode)
+    except:
+        pass
     text = load_message(mode)
     if buttons is None:
         await send_text(update, context, text)
@@ -59,6 +62,15 @@ async def plain_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         await send_text_buttons(update, context, f'{response} {dialog.current_quiz_score()}', quiz_buttons_menu())
 
+    elif mode == "TRANSLATOR":
+        response = await chat_gpt.send_question(dialog.prompt, text)
+        await send_text_buttons(update, context, "це перекладається як:")
+        await send_text_buttons(update, context, response, {
+            "transl_change": "інша мова",
+            "transl_finish": "🛑 вийти в меню"
+        })
+
+
     else:
         await send_text(update, context, "Ви не обрали режим спілкування. За подробицями зверніться до /start")
 
@@ -85,7 +97,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'random': 'Дізнатися випадковий цікавий факт 🧠',
         'gpt': 'Задати питання чату GPT 🤖',
         'talk': 'Поговорити з відомою особистістю 👤',
-        'quiz': 'Взяти участь у квізі ❓'
+        'quiz': 'Взяти участь у квізі ❓',
+        'translator': 'перекласти іншою мовою'
         # Додати команду в меню можна так:
         # 'command': 'button text'
 
@@ -263,6 +276,42 @@ async def quiz_buttons_handler(update: Update, context):
         await send_text(update, context, quiz_quest)
     await update.callback_query.answer()
 
+"""
+Бот пропонує вибрати мову, на яку потрібно перекласти текст, використовуючи кнопки.
+Після вибору мови користувач надсилає текст, який потрібно перекласти.
+Бот використовує ChatGPT для перекладу тексту та надсилає результат користувачеві.
+До повідомлення має бути прикріплена кнопка зміни мови та кнопка "Закінчити", натискання на яку
+працює так само, як команда /start.
+"""
+
+async def translator(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    init_dialog_if_not(context)
+    context.user_data['dialog'].set_mode("TRANSLATOR", "")
+
+    await send_text_buttons(update, context, "textОберіть на яку мову перекласти", {
+                            "transl_eng": "англійська",
+                            "transl_de": "німецька",
+                            "transl_es": "іспанська",
+                            "transl_jp": "японська",
+                            "transl_finish": "🛑 вийти в меню"
+                        })
+
+async def transl_buttons_handler(update: Update, context):
+    init_dialog_if_not(context)
+    dialog = context.user_data['dialog']
+    query = update.callback_query.data
+    if query == 'transl_eng':
+        dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову англійська")
+    elif query == 'transl_de':
+        dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову німецька")
+    elif query == 'transl_es':
+        dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову іспанська")
+    elif query == 'transl_jp':
+        dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову японська")
+    elif query == "transl_change":
+        translator(update, context)
+
+    await update.callback_query.answer()
 
 chat_gpt = ChatGptService(credentials.ChatGPT_TOKEN)
 app = ApplicationBuilder().token(credentials.BOT_TOKEN).build()
@@ -275,6 +324,7 @@ app.add_handler(CommandHandler('random', random))
 app.add_handler(CommandHandler('gpt', gpt))
 app.add_handler(CommandHandler('talk', talk))
 app.add_handler(CommandHandler('quiz', quiz))
+app.add_handler(CommandHandler('translator', translator))
 
 # Зареєструвати обробник колбеку можна так:
 app.add_handler(CallbackQueryHandler(finish_buttons_handler, pattern='.*_finish$')) #всі кнопки *_finish однаково вертають на початок
@@ -282,6 +332,7 @@ app.add_handler(CallbackQueryHandler(random_buttons_handler, pattern='^random_.*
 #app.add_handler(CallbackQueryHandler(gpt_buttons_handler, pattern='^gpt_.*'))
 app.add_handler(CallbackQueryHandler(talk_buttons_handler, pattern='^talk_.*'))
 app.add_handler(CallbackQueryHandler(quiz_buttons_handler, pattern='^quiz_.*'))
+app.add_handler(CallbackQueryHandler(transl_buttons_handler, pattern='^transl_.*'))
 # app.add_handler(CallbackQueryHandler(default_callback_handler))
 
 app.run_polling()
