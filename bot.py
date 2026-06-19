@@ -61,20 +61,16 @@ async def plain_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     elif mode == "FILMS":
 
-        if dialog.film_mode == "GENRE":
-            dialog.film_genre = text
+        if dialog.films_mode == "GENRE":
+            dialog.films_genre = text
         # test
         response = await chat_gpt.send_question(f"Перевір наявність вказаного жанру у вказаній категорії творів мистецтва", f"чи існує жанр {text} в категорії {dialog.films_cat}? Відповідь ТАК або НІ")
         if response == "НІ":
             await send_text_buttons(update, context, "Такого жанру не існує. Спробуйте ще", {"films_finish": "🛑 Закінчити"})
         else:
-            if not dialog.film_dict:
-                message = ""
-            else:
-                message = "Врахуй, що не подобаються наступні твори: " # todo
             await films_ask(update, context)
 
-else:
+    else:
         await send_text(update, context, "Ви не обрали режим спілкування. За подробицями зверніться до /start")
 
 async def finish_buttons_handler(update: Update, context):
@@ -279,24 +275,12 @@ async def quiz_buttons_handler(update: Update, context):
         await send_text(update, context, quiz_quest)
     await update.callback_query.answer()
 
-"""**"Рекомендації щодо фільмів та книг"**
-
-Бот пропонує вибрати категорію рекомендацій: фільми, книги, музика.
-Після вибору категорії бот запитує жанр.
-Після отримання, формує запит та запитує у ChatGPT рекомендації 
-та надсилає їх користувачеві.
-До них мають бути прикріплені кнопки:
-
-"Не подобається", яка робить вибраний твір нецікавим. Натискання на
-кнопку генерує нову відповідь, враховуючи всі нецікаві твори, введені користувачем.
-
-"Закінчити", натискання на яку працює так само, як команда /start.
-"""
 async def films(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
-    context.user_data['dialog'].set_mode("FILMS", "")
-    dialog.film_mode = "CAT"
-    dialog.film_genre = ""
+    dialog = context.user_data['dialog']
+    dialog.set_mode("FILMS", "")
+    dialog.films_mode = "CAT"
+    dialog.films_genre = ""
     await send_text_buttons(update, context, "Оберіть категорію", {
                             "films_films": "фільми",
                             "films_books": "книги",
@@ -308,9 +292,14 @@ async def films_ask(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
     dialog = context.user_data['dialog']
 
+    if not dialog.films_dict:
+        message = ""
+    else:
+        message = f"Врахуй, що не подобаються наступні твори: {', '.join(dialog.films_dict.keys())}"
     response = await chat_gpt.send_question(
-        f"Порекомендуй твір у категорії {dialog.films_cat} жанра {dialog.films_genre}",
+        f"Порекомендуй твір у категорії {dialog.films_cat} жанра {dialog.films_genre}. Просто надай назву і рік",
         message)
+    dialog.films_recomend = response
     await send_text_buttons(update, context, response, {"films_dislike": "фуууу", "films_finish": "🛑 Закінчити"})
 
 async def films_buttons_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -318,22 +307,23 @@ async def films_buttons_handler(update: Update, context: ContextTypes.DEFAULT_TY
     dialog = context.user_data['dialog']
     query = update.callback_query.data
     if query == "films_films":
-        dialog.film_cat = "фільми"
+        dialog.films_cat = "фільми"
     elif query == "films_books":
-        dialog.film_cat = "книги"
+        dialog.films_cat = "книги"
     elif query == "films_music":
-        dialog.film_cat = "музика"
+        dialog.films_cat = "музика"
     elif query == "films_dislike":
         #попередня строка - взяти назву - занести
-        last_film = dialog.film_recomend
-        dialog.film_dict[last_film] = False
-        await films_ask(update: Update, context: ContextTypes.DEFAULT_TYPE)
+        last_film = dialog.films_recomend
+        dialog.films_dict[last_film] = False
+        await films_ask(update, context)
 
-    message = "Оберіть жанр"
-    dialog.film_mode = "GENRE"
-    await send_text_buttons(update, context, "Тепер напишіть жанр", {
-        "films_finish": "🛑 Закінчити"
-    })
+    if dialog.films_mode = "CAT":
+        message = "Оберіть жанр"
+        dialog.films_mode = "GENRE"
+        await send_text_buttons(update, context, "Тепер напишіть жанр", {
+            "films_finish": "🛑 Закінчити"
+        })
 
 
 chat_gpt = ChatGptService(credentials.ChatGPT_TOKEN)
