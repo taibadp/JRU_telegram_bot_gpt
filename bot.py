@@ -9,11 +9,14 @@ from util import (load_message, send_text, send_image, show_main_menu,
 
 import credentials
 
+# якщо користувач продовжує сесію після перезапуску бота - діалог не існує
 def init_dialog_if_not(context: ContextTypes.DEFAULT_TYPE):
     dialog = context.user_data.get("dialog")
     if dialog is None:
         context.user_data["dialog"] = Dialog()
 
+# для обраного режиму показує картинку та заголовочний текст
+# якщо додані кнопки - виводить і їх
 async def show_mode_head(update: Update, context: ContextTypes.DEFAULT_TYPE, mode: str, buttons: dict = None):
     await send_image(update, context, mode)
     text = load_message(mode)
@@ -22,7 +25,7 @@ async def show_mode_head(update: Update, context: ContextTypes.DEFAULT_TYPE, mod
     else:
         await send_text_buttons(update, context, text, buttons)
 
-
+# обробник ручного введення
 async def plain_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
     dialog = context.user_data.get("dialog")
@@ -40,62 +43,70 @@ async def plain_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         else:
             await send_text(update, context, "I don't know such command. Use /start command for information")
     """
+
+    # раптом введена неіснуюча команда
     if text[0] == "/":
         await send_text(update, context, "I don't know such command. Use /start command for information")
 
-    elif mode == "GPT":
-        response = await chat_gpt.send_question(dialog.prompt, update.message.text)
-        await send_text_buttons(update, context, response, {"gpt_finish": "🛑 Закінчити"})
-
-    elif mode == "TALK":
-        response = await chat_gpt.send_question(dialog.prompt, update.message.text)
-        await send_text_buttons(update, context, response, {"talk_finish": "🛑 Закінчити"})
-
-    elif mode == "QUIZ":
-        dialog.quiz_total += 1
-        response = await chat_gpt.add_message(text)
-
-        dialog.quiz_count_good_answer(response)
-
-        await send_text_buttons(update, context, f'{response} {dialog.current_quiz_score()}', quiz_buttons_menu())
-
-    elif mode == "TRANSLATOR":
-        response = await chat_gpt.send_question(dialog.prompt, text)
-        await send_text(update, context, "це перекладається як:")
-        await send_text_buttons(update, context, response, {
-            "transl_change": "інша мова",
-            "transl_finish": "🛑 Закінчити"
-        })
-
-
-    elif mode == "FILMS":
-
-        if dialog.films_mode == "GENRE":
-            dialog.films_genre = text
-        # test
-        response = await chat_gpt.send_question(f"Перевір наявність вказаного жанру у вказаній категорії творів мистецтва", f"чи існує жанр {text} в категорії {dialog.films_cat}? Відповідь ТАК або НІ")
-        if response == "НІ":
-            await send_text_buttons(update, context, "Такого жанру не існує. Спробуйте ще", {"films_finish": "🛑 Закінчити"})
-        else:
-            await films_ask(update, context)
-
     else:
-        await send_text(update, context, "Ви не обрали режим спілкування. За подробицями зверніться до /start")
+        match mode:
+            case "GPT":
+                response = await chat_gpt.add_message(update.message.text)
+                await send_text_buttons(update, context, response, {"gpt_finish": "🛑 Закінчити"})
 
+            case "TALK":
+                response = await chat_gpt.add_message(update.message.text)
+                await send_text_buttons(update, context, response, {"talk_finish": "🛑 Закінчити"})
+
+            case "QUIZ":
+                dialog.quiz_total += 1
+                response = await chat_gpt.add_message(text)
+
+                dialog.quiz_count_good_answer(response)
+
+                await send_text_buttons(update, context, f'{response} {dialog.current_quiz_score()}', quiz_buttons_menu())
+
+            case "TRANSLATOR":
+                if dialog.transl_lang == "":
+                    await send_text(update, context, "ви не обрали мову")
+                    await translate(update, context)
+                else:
+                    response = await chat_gpt.send_question(dialog.prompt, text)
+                    await send_text(update, context, "це перекладається як:")
+                    await send_text_buttons(update, context, response, {
+                        "transl_change": "інша мова",
+                        "transl_finish": "🛑 Закінчити"
+                    })
+
+
+            case "FILMS":
+
+                if dialog.films_mode == "GENRE":
+                    dialog.films_genre = text
+                # test
+                response = await chat_gpt.send_question(f"Перевір наявність вказаного жанру у вказаній категорії творів мистецтва", f"чи існує жанр {text} в категорії {dialog.films_cat}? Відповідь ТАК або НІ")
+                if response == "НІ":
+                    await send_text_buttons(update, context, "Такого жанру не існує. Спробуйте ще", {"films_finish": "🛑 Закінчити"})
+                else:
+                    await films_ask(update, context)
+
+            case _:
+                await send_text(update, context, "Ви не обрали режим спілкування. За подробицями зверніться до /start")
+
+# всі кнопки _finish діють однаково - направляють на /start, де завершується діалог
 async def finish_buttons_handler(update: Update, context):
-    init_dialog_if_not(context)
-    context.user_data['dialog'].end_current_dialog()
     await start(update, context)
     await update.callback_query.answer()
 
+# команда Старт - головне меню
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # тут зберігаємо поточний стан користувача
     init_dialog_if_not(context)
     dialog = context.user_data.get("dialog")
 
-    if dialog.mode not in [None, "DEFAULT"]:
-        return
+    #if dialog.mode not in [None, "DEFAULT"]:
+    #    return
 
     dialog.end_current_dialog()
 
@@ -108,24 +119,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'quiz': 'Взяти участь у квізі ❓',
         'translator': 'перекласти іншою мовою',
         'films': 'Рекомендації фільмів'
-        # Додати команду в меню можна так:
-        # 'command': 'button text'
-
     })
 
-
+# команда Випадковий факт
 async def random(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
     dialog = context.user_data['dialog']
 
-    await show_mode_head(update, context, 'random')
+    if dialog.mode != "RANDOM":
+        await show_mode_head(update, context, 'random')
+    else:
+        await send_text(update, context, "і ще факт...")
 
     dialog.set_mode("RANDOM", load_prompt('random'))
     try:
         response = await chat_gpt.send_question(dialog.prompt, 'Давай рандомний факт')
     except:
         response = f'Interesting fact failed '
-    # await send_text(update, context, response)
     await send_text_buttons(
         update, context,
         response,
@@ -136,35 +146,24 @@ async def random(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def random_buttons_handler(update: Update, context):
-    init_dialog_if_not(context)
     query = update.callback_query.data
     if query == 'random_finish':
-        context.user_data['dialog'].end_current_dialog()
         await start(update, context)
     elif query == 'random_one_more':
         await random(update, context)
     await update.callback_query.answer()
 
-
+# режим розмови з Gpt
 async def gpt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
     dialog = context.user_data['dialog']
     dialog.set_mode("GPT", load_prompt('gpt'))
+    chat_gpt.set_prompt(dialog.prompt)
     await show_mode_head(update, context, 'gpt', {
             'gpt_finish' : '🛑 Закінчити',
         })
 
-"""
-async def gpt_buttons_handler(update: Update, context):
-    init_dialog_if_not(context)
-    query = update.callback_query.data
-    if query == 'gpt_finish':
-        context.user_data['dialog'].end_current_dialog()
-        await start(update, context)
-    await update.callback_query.answer()
-"""
-
-
+# режим розмова з особистістю
 async def talk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
     dialog = context.user_data['dialog']
@@ -182,58 +181,62 @@ async def talk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def talk_buttons_handler(update: Update, context):
     init_dialog_if_not(context)
     query = update.callback_query.data
-    if query == 'talk_finish':
-        context.user_data['dialog'].end_current_dialog()
-        await start(update, context)
-
-    elif query == 'talk_cobain':
-        context.user_data['dialog'].talk_mode = query
-        await start_talk_session(update, context)
-    elif query == 'talk_queen':
-        context.user_data['dialog'].talk_mode = query
-        await start_talk_session(update, context)
-    elif query == 'talk_tolkien':
-        context.user_data['dialog'].talk_mode = query
-        await start_talk_session(update, context)
-    elif query == 'talk_nietzsche':
-        context.user_data['dialog'].talk_mode = query
-        await start_talk_session(update, context)
-    elif query == 'talk_hawking':
-        context.user_data['dialog'].talk_mode = query
-        await start_talk_session(update, context)
-    elif query == 'talk_prachett':
-        context.user_data['dialog'].talk_mode = query
-        await start_talk_session(update, context)
+    match query:
+        case 'talk_finish':
+            context.user_data['dialog'].end_current_dialog()
+            await start(update, context)
+        case 'talk_cobain':
+            context.user_data['dialog'].talk_mode = query
+            await start_talk_session(update, context)
+        case 'talk_queen':
+            context.user_data['dialog'].talk_mode = query
+            await start_talk_session(update, context)
+        case 'talk_tolkien':
+            context.user_data['dialog'].talk_mode = query
+            await start_talk_session(update, context)
+        case 'talk_nietzsche':
+            context.user_data['dialog'].talk_mode = query
+            await start_talk_session(update, context)
+        case 'talk_hawking':
+            context.user_data['dialog'].talk_mode = query
+            await start_talk_session(update, context)
+        case 'talk_prachett':
+            context.user_data['dialog'].talk_mode = query
+            await start_talk_session(update, context)
+        case _:
+            await send_text(update, context, "Нажаль, ця персона зараз у відпустці. Оберіть іншу")
+            #talk(update, context)
     await update.callback_query.answer()
 
 def talk_subject_name(context):
     talk_mode = context.user_data['dialog'].talk_mode
-    if talk_mode == "talk_cobain":
-        return "Курт Кобейн"
-    elif talk_mode == "talk_queen":
-        return "Єлизавета II"
-
-    elif talk_mode == "talk_tolkien":
-        return "Джон Толкін"
-    elif talk_mode == "talk_nietzsche":
-        return "Фрідріх Ніцше"
-    elif talk_mode == "talk_hawking":
-        return "Стівен Гокінг"
-    #elif talk_mode == "talk_prachett":
-    #    return "Prachett"
-    else:
-        return talk_mode[5:].capitalize()
-
+    match talk_mode:
+        case "talk_cobain":
+            return "Курт Кобейн"
+        case "talk_queen":
+            return "Єлизавета II"
+        case "talk_tolkien":
+            return "Джон Толкін"
+        case "talk_nietzsche":
+            return "Фрідріх Ніцше"
+        case "talk_hawking":
+            return "Стівен Гокінг"
+        #elif talk_mode == "talk_prachett":
+        #    return "Prachett"
+        case _:
+            return talk_mode[5:].capitalize()
 
 async def start_talk_session(update: Update, context):
     init_dialog_if_not(context)
     #context.user_data['dialog'].mode = "TALK"
     context.user_data['dialog'].set_mode("TALK", load_prompt(context.user_data['dialog'].talk_mode))
+    chat_gpt.set_prompt(context.user_data['dialog'].prompt)
     await send_image(update, context, context.user_data['dialog'].talk_mode)
     await send_text_buttons(update, context, f"Hello, it's {talk_subject_name(context)}. Ask me anything", {
             'talk_finish' : '🛑 Закінчити',
         })
 
+# режим Квіз - серії запитань на обрану тему
 async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
     context.user_data['dialog'].set_mode("QUIZ", load_prompt('quiz'))
@@ -301,22 +304,33 @@ async def transl_buttons_handler(update: Update, context):
     init_dialog_if_not(context)
     dialog = context.user_data['dialog']
     query = update.callback_query.data
-    if query == 'transl_eng':
-        dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову англійська")
-        await send_text(update, context, "Обрано англійську")
-    elif query == 'transl_de':
-        dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову німецька")
-        await send_text(update, context, "Обрано німецьку")
-    elif query == 'transl_es':
-        dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову іспанська")
-        await send_text(update, context, "Обрано іспанську")
-    elif query == 'transl_jp':
-        dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову японська")
-        await send_text(update, context, "Обрано японську")
-    elif query == "transl_change":
-        await translate(update, context)
-
+    match query:
+        case 'transl_eng':
+            dialog.transl_lang = query
+            dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову англійська")
+            await send_text(update, context, "Обрано англійську")
+        case 'transl_de':
+            dialog.transl_lang = query
+            dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову німецька")
+            await send_text(update, context, "Обрано німецьку")
+        case 'transl_es':
+            dialog.transl_lang = query
+            dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову іспанська")
+            await send_text(update, context, "Обрано іспанську")
+        case 'transl_jp':
+            dialog.transl_lang = query
+            dialog.set_mode("TRANSLATOR", "Переклади надане далі речення на мову японська")
+            await send_text(update, context, "Обрано японську")
+        case "transl_change":
+            dialog.transl_lang = ""
+            await translate(update, context)
+        case _:
+            dialog.transl_lang = ""
+            await send_text(update, context, "Нажаль, ця мова ще не підтримується. Ви можете обрати іншу")
+            await translate(update, context)
     await update.callback_query.answer()
+
+# порадь фільм/книгу/музику, а я покажу, якщо не подобається
 async def films(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_dialog_if_not(context)
     dialog = context.user_data['dialog']

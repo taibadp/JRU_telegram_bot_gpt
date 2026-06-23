@@ -109,6 +109,7 @@ class Dialog:
     films_genre = ""
     films_recomend = ""
     films_dict = {}
+    transl_lang = ""
 
     def __init__(self):
         self.mode = "DEFAULT"  # обраний пункт головного меню
@@ -123,6 +124,7 @@ class Dialog:
         self.films_cat = ""
         self.films_genre = ""
         self.films_recomend = ""
+        self.transl_lang = ""
 
     def set_mode(self, mode: str, prompt: str = ""):
         self.mode = mode
